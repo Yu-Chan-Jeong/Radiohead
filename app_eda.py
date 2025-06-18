@@ -208,7 +208,7 @@ class EDA:
             st.info("population_trend 파일을 업로드 해주세요.")
             return
 
-        df = pd.read_csv(uploaded, dtype=str）
+        df = pd.read_csv(uploaded, dtype=str)
         df = df[df['지역'] == '세종'].replace('-', '0')
         for col in ['인구', '출생아수(명)', '사망자수(명)']:
             df[col] = pd.to_numeric(df[col])
