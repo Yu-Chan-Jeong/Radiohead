@@ -218,6 +218,36 @@ class EDA:
         st.text(buffer.getvalue())
         st.subheader("기초 통계량 (df.describe())")
         st.dataframe(df.describe())
+        # — 전국 인구 추이 분석 & 2035년 예측 —
+        pop_df = df.copy()
+        pop_df = pop_df[pop_df['지역'] == '전국'].replace('-', '0')
+        pop_df['Year']       = pop_df['연도'].astype(int)
+        pop_df['Population'] = pd.to_numeric(pop_df['인구'], errors='coerce')
+        pop_df['Births']     = pd.to_numeric(pop_df['출생아수(명)'], errors='coerce')
+        pop_df['Deaths']     = pd.to_numeric(pop_df['사망자수(명)'], errors='coerce')
+        pop_df = pop_df.dropna(subset=['Population','Births','Deaths']).sort_values('Year')
+
+        last3   = pop_df.tail(3)
+        avg_net = (last3['Births'] - last3['Deaths']).mean()
+        ly, lp  = last3['Year'].iloc[-1], last3['Population'].iloc[-1]
+
+        proj_years = list(range(ly+1, 2036))
+        proj_pops  = [lp + avg_net * (y - ly) for y in proj_years]
+        proj_df    = pd.DataFrame({'Year': proj_years, 'Population': proj_pops})
+
+        plot_df = pd.concat([pop_df[['Year','Population']], proj_df], ignore_index=True)
+
+        fig, ax = plt.subplots(figsize=(10,6))
+        sns.lineplot(data=plot_df, x='Year', y='Population', label='Observed', ax=ax)
+        sns.scatterplot(data=proj_df, x='Year', y='Population', label='Projected', ax=ax)
+        ax.set_title('Population Trend by Year')
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Population')
+        ax.legend()
+        plt.tight_layout()
+
+        st.subheader("Population Trend Analysis")
+        st.pyplot(fig)
 
         tabs = st.tabs([
             "1. 목적 & 절차",
