@@ -315,15 +315,23 @@ class EDA:
         # Visualization
         with tabs[4]:
             st.header("Cumulative Population Area Chart")
-            fig3, ax3 = plt.subplots(figsize=(12,7))
-            palette = sns.color_palette("tab20", n_colors=pivot.shape[1])
-            pivot.plot.area(ax=ax3, color=palette, linewidth=0)
+
+            # 년도 리스트와 각 지역별 값 리스트 준비
+            years = pivot.index.tolist()
+            data = [pivot[col].values for col in pivot.columns]
+
+            fig3, ax3 = plt.subplots(figsize=(12, 7))
+            palette = sns.color_palette("tab20", n_colors=len(pivot.columns))
+
+            # stackplot 으로 누적 영역 그래프
+            ax3.stackplot(years, *data, labels=pivot.columns, colors=palette)
             ax3.set_title("Population by Region Over Years")
             ax3.set_xlabel("Year")
             ax3.set_ylabel("Population")
-            ax3.legend(title="Region", bbox_to_anchor=(1,1))
-            st.pyplot(fig3)
+            ax3.legend(title="Region", bbox_to_anchor=(1, 1))
 
+            plt.tight_layout()
+            st.pyplot(fig3)
 # ---------------------
 # 페이지 객체 생성
 # ---------------------
