@@ -203,6 +203,7 @@ class Logout:
 class EDA:
     def __init__(self):
         st.title("📊 Population Trend EDA")
+        # 1) File uploader
         uploaded = st.file_uploader("Upload population_trends.csv", type="csv")
         if not uploaded:
             st.info("Please upload population_trends.csv")
@@ -230,28 +231,33 @@ class EDA:
         region_df['Region'] = region_df['지역'].map(region_map)
         region_df = region_df.dropna(subset=['Population'])
 
-        # 4) Tabs
+        # 4) Pivot table for tabs below
+        pivot = (
+            region_df
+            .pivot_table(index='Year', columns='Region', values='Population', aggfunc='sum')
+            .fillna(0)
+            .sort_index()
+        )
+
+        # 5) Tabs
         tabs = st.tabs([
-            "기초 통계",
-            "연도별 추이",
-            "지역별 분석",
-            "변화량 분석",
-            "시각화"
+            "Basic Stats",
+            "Nationwide Trend",
+            "Pivot Table",
+            "Change Analysis",
+            "Visualization"
         ])
 
-        # 4-1) Basic stats
+        # Basic Stats
         with tabs[0]:
-            st.header("Basic Dataset Info")
+            st.header("Basic Statistics")
             buf = io.StringIO()
-            region_df.info(buf=buf)
+            orig_df.info(buf=buf)
             st.text(buf.getvalue())
-            st.subheader("Overall Descriptive Statistics")
+            st.subheader("Descriptive Statistics")
             st.dataframe(orig_df[['Population','Births','Deaths']].describe())
-            st.subheader("Sejong Descriptive Statistics")
-            sejong = orig_df[orig_df['지역']=='세종']
-            st.dataframe(sejong[['Population','Births','Deaths']].describe())
 
-        # 4-2) Nationwide trend & projection
+        # Nationwide Trend
         with tabs[1]:
             st.header("Nationwide Trend & 2035 Projection")
             nation = orig_df[orig_df['지역']=='전국'].sort_values('Year')
@@ -272,56 +278,58 @@ class EDA:
             ax.legend()
             st.pyplot(fig)
 
-        # 4-3) Regional pivot table
+        # Pivot Table
         with tabs[2]:
             st.header("Pivot Table: Population by Region & Year")
-            pivot = region_df.pivot_table(index='Year', columns='Region', values='Population', aggfunc='sum').fillna(0)
             st.dataframe(pivot)
 
-        # 4-4) Change analysis
+        # Change Analysis
         with tabs[3]:
-            st.header("5-Year Change & Top 100 Year-over-Year Changes")
-            # 5-year change
+            st.header("5-Year Change Analysis")
             years = sorted(pivot.columns)
-            last_year = years[-1]
-            year_5ago = years[-6] if len(years)>5 else years[0]
-            p5 = pivot.dropna(subset=[year_5ago, last_year])
-            p5['Change'] = p5[last_year] - p5[year_5ago]
-            p5['Rate']   = p5['Change']/p5[year_5ago]*100
-            p5 = p5.sort_values('Change', ascending=False)
+            if len(years) < 2:
+                st.warning("Not enough data to compute changes.")
+            else:
+                last_year = years[-1]
+                year_5ago = years[-6] if len(years) > 5 else years[0]
+                p5 = pivot.dropna(subset=[year_5ago, last_year]).copy()
+                p5['Change'] = p5[last_year] - p5[year_5ago]
+                p5['Rate']   = p5['Change'] / p5[year_5ago] * 100
+                p5 = p5.sort_values('Change', ascending=False)
 
-            fig1, ax1 = plt.subplots(figsize=(8,6))
-            sns.barplot(x=p5['Change']/1000, y=p5.index, ax=ax1, palette="Blues_d")
-            ax1.set_title("5-Year Population Change")
-            ax1.set_xlabel("Change (Thousands)")
-            st.pyplot(fig1)
+                fig1, ax1 = plt.subplots(figsize=(8,6))
+                sns.barplot(x=p5['Change']/1000, y=p5.index, ax=ax1, palette="Blues_d")
+                ax1.set_title("5-Year Population Change")
+                ax1.set_xlabel("Change (Thousands)")
+                st.pyplot(fig1)
 
-            fig2, ax2 = plt.subplots(figsize=(8,6))
-            sns.barplot(x=p5['Rate'], y=p5.index, ax=ax2, palette="coolwarm")
-            ax2.set_title("5-Year Change Rate (%)")
-            ax2.set_xlabel("Rate (%)")
-            st.pyplot(fig2)
+                fig2, ax2 = plt.subplots(figsize=(8,6))
+                sns.barplot(x=p5['Rate'], y=p5.index, ax=ax2, palette="coolwarm")
+                ax2.set_title("5-Year Change Rate (%)")
+                ax2.set_xlabel("Rate (%)")
+                st.pyplot(fig2)
 
-            # top 100 YoY
-            yoy = (
-                region_df[['Region','Year','Population']]
-                .sort_values(['Region','Year'])
-                .groupby('Region')
-                .apply(lambda g: g.assign(Diff=g['Population'].diff()))
-                .reset_index(drop=True)
-                .dropna(subset=['Diff'])
-            )
-            top100 = yoy.sort_values('Diff', ascending=False).head(100)
-            def hl(val): return 'background-color: lightblue' if val>0 else 'background-color: lightcoral'
-            styled = (
-                top100[['Region','Year','Population','Diff']]
-                .style
-                .applymap(hl, subset=['Diff'])
-                .format({"Population":"{:,}", "Diff":"{:,}"})
-            )
-            st.write(styled)
+                # Top 100 Year-over-Year diffs
+                yoy = (
+                    region_df[['Region','Year','Population']]
+                    .sort_values(['Region','Year'])
+                    .groupby('Region')
+                    .apply(lambda g: g.assign(Diff=g['Population'].diff()))
+                    .reset_index(drop=True)
+                    .dropna(subset=['Diff'])
+                )
+                top100 = yoy.sort_values('Diff', ascending=False).head(100)
+                def hl(val): return 'background-color: lightblue' if val>0 else 'background-color: lightcoral'
+                styled = (
+                    top100[['Region','Year','Population','Diff']]
+                    .style
+                    .applymap(hl, subset=['Diff'])
+                    .format({"Population":"{:,}", "Diff":"{:,}"})
+                )
+                st.subheader("Top 100 Year-over-Year Changes")
+                st.write(styled)
 
-        # 4-5) Visualization: cumulative area chart
+        # Visualization
         with tabs[4]:
             st.header("Cumulative Population Area Chart")
             fig3, ax3 = plt.subplots(figsize=(12,7))
