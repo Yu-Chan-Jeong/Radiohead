@@ -208,18 +208,19 @@ class EDA:
             st.info("population_trend 파일을 업로드 해주세요.")
             return
 
-        df = pd.read_csv(uploaded, dtype=str)
+            # 파일 업로드 직후
+        orig_df = pd.read_csv(uploaded, dtype=str)
+
+        # — Sejong 지역 전처리 & 통계 출력 —
+        df = orig_df.copy()
         df = df[df['지역'] == '세종'].replace('-', '0')
         for col in ['인구', '출생아수(명)', '사망자수(명)']:
             df[col] = pd.to_numeric(df[col])
-        st.subheader("데이터 구조 (df.info())")
-        buffer = io.StringIO()
-        df.info(buf=buffer)
-        st.text(buffer.getvalue())
-        st.subheader("기초 통계량 (df.describe())")
-        st.dataframe(df.describe())
+        # ... (Sejong df.info(), df.describe() 출력) ...
+
         # — 전국 인구 추이 분석 & 2035년 예측 —
-        pop_df = df.copy()
+        # ↓ 기존 pop_df = df.copy() 가 아니라 orig_df 에서 시작
+        pop_df = orig_df.copy()
         pop_df = pop_df[pop_df['지역'] == '전국'].replace('-', '0')
         pop_df['Year']       = pop_df['연도'].astype(int)
         pop_df['Population'] = pd.to_numeric(pop_df['인구'], errors='coerce')
@@ -248,6 +249,7 @@ class EDA:
 
         st.subheader("Population Trend Analysis")
         st.pyplot(fig)
+
 
         tabs = st.tabs([
             "1. 목적 & 절차",
