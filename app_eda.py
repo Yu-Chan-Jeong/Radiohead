@@ -204,54 +204,40 @@ class EDA:
     def __init__(self):
         st.title("📊 Population Trend EDA")
 
-        # 1) Single file uploader
-        uploaded = st.file_uploader("Upload population_trend.csv", type="csv")
+       uploaded = st.file_uploader("Upload population_trend.csv", type="csv")
         if not uploaded:
             st.info("Please upload population_trend.csv")
             st.stop()
 
-        # 2) Read once
+        # 2) 원본 한 번 읽기
         orig_df = pd.read_csv(uploaded, dtype=str)
         orig_df.columns = orig_df.columns.str.strip()
 
-        # — 3) Sejong region preprocessing & stats —
-        sejong_df = (
-            orig_df[orig_df['지역'] == '세종']
-            .replace('-', '0')
-            .copy()
-        )
-        for col in ['인구', '출생아수(명)', '사망자수(명)']:
-            sejong_df[col] = pd.to_numeric(sejong_df[col], errors='coerce')
+        # 3) Sejong 통계
+        sejong = orig_df[orig_df['지역']=='세종'].replace('-', '0').copy()
+        for col in ['인구','출생아수(명)','사망자수(명)']:
+            sejong[col] = pd.to_numeric(sejong[col], errors='coerce')
+        st.subheader("Sejong Data Structure")
+        buf = io.StringIO(); sejong.info(buf=buf); st.text(buf.getvalue())
+        st.subheader("Sejong Descriptive Statistics")
+        st.dataframe(sejong[['인구','출생아수(명)','사망자수(명)']].describe())
 
-        st.subheader("Sejong Data Structure (df.info())")
-        buf = io.StringIO()
-        sejong_df.info(buf=buf)
-        st.text(buf.getvalue())
+        # 4) Nationwide 추이 & 2035 예측
+        nation = orig_df[orig_df['지역']=='전국'].replace('-', '0').copy()
+        nation['Year']       = nation['연도'].astype(int)
+        nation['Population'] = pd.to_numeric(nation['인구'], errors='coerce')
+        nation['Births']     = pd.to_numeric(nation['출생아수(명)'], errors='coerce')
+        nation['Deaths']     = pd.to_numeric(nation['사망자수(명)'], errors='coerce')
+        nation = nation.dropna(subset=['Population','Births','Deaths']).sort_values('Year')
 
-        st.subheader("Sejong Descriptive Statistics (df.describe())")
-        st.dataframe(sejong_df.describe())
-
-        # — 4) Nationwide trend & 2035 projection —
-        nation_df = (
-            orig_df[orig_df['지역'] == '전국']
-            .replace('-', '0')
-            .copy()
-        )
-        nation_df['Year']       = nation_df['연도'].astype(int)
-        nation_df['Population'] = pd.to_numeric(nation_df['인구'], errors='coerce')
-        nation_df['Births']     = pd.to_numeric(nation_df['출생아수(명)'], errors='coerce')
-        nation_df['Deaths']     = pd.to_numeric(nation_df['사망자수(명)'], errors='coerce')
-        nation_df = nation_df.dropna(subset=['Population','Births','Deaths']).sort_values('Year')
-
-        last3   = nation_df.tail(3)
+        last3   = nation.tail(3)
         avg_net = (last3['Births'] - last3['Deaths']).mean()
         ly, lp  = last3['Year'].iat[-1], last3['Population'].iat[-1]
-
         proj_years = list(range(ly+1, 2036))
         proj_pops  = [lp + avg_net*(y-ly) for y in proj_years]
         proj_df    = pd.DataFrame({'Year': proj_years, 'Population': proj_pops})
 
-        trend_df = pd.concat([nation_df[['Year','Population']], proj_df], ignore_index=True)
+        trend_df = pd.concat([nation[['Year','Population']], proj_df], ignore_index=True)
         fig, ax = plt.subplots(figsize=(10,6))
         sns.lineplot(data=trend_df, x='Year', y='Population', label='Observed', ax=ax)
         sns.scatterplot(data=proj_df, x='Year', y='Population', label='Projected', ax=ax)
@@ -262,16 +248,11 @@ class EDA:
         st.subheader("Nationwide Population Trend")
         st.pyplot(fig)
 
-        # — 5) Regional 5-year change & rate analysis —
-        reg_df = (
-            orig_df[orig_df['지역'] != '전국']
-            .replace('-', '0')
-            .copy()
-        )
-        reg_df['Year']       = reg_df['연도'].astype(int)
-        reg_df['Population'] = pd.to_numeric(reg_df['인구'], errors='coerce')
-        reg_df = reg_df.dropna(subset=['Population'])
-
+        # 5) 지역별 5년 변화량 & 변화율
+        reg = orig_df[orig_df['지역']!='전국'].replace('-', '0').copy()
+        reg['Year']       = reg['연도'].astype(int)
+        reg['Population'] = pd.to_numeric(reg['인구'], errors='coerce')
+        reg = reg.dropna(subset=['Population'])
         region_map = {
             '서울특별시':'Seoul','부산광역시':'Busan','대구광역시':'Daegu',
             '인천광역시':'Incheon','광주광역시':'Gwangju','대전광역시':'Daejeon',
@@ -280,42 +261,57 @@ class EDA:
             '전라북도':'Jeonbuk','전라남도':'Jeonnam','경상북도':'Gyeongbuk',
             '경상남도':'Gyeongnam','제주특별자치도':'Jeju'
         }
-        reg_df['Region'] = reg_df['지역'].map(region_map)
+        reg['Region'] = reg['지역'].map(region_map)
 
-        pivot = reg_df.pivot_table(index='Region', columns='Year', values='Population')
+        pivot = reg.pivot_table(index='Region', columns='Year', values='Population')
         years = sorted(pivot.columns)
-
-        if len(years) < 2:
-            st.warning("Not enough Year data for regional change analysis.")
-        else:
+        if len(years) > 1:
             last_year = years[-1]
-            year_5ago = years[-6] if len(years) > 5 else years[0]
+            year_5ago = years[-6] if len(years)>5 else years[0]
             piv2 = pivot.dropna(subset=[year_5ago, last_year])
+            piv2['Change'] = piv2[last_year] - piv2[year_5ago]
+            piv2['Rate']   = piv2['Change'] / piv2[year_5ago] * 100
+            piv2 = piv2.sort_values('Change', ascending=False)
 
-            if piv2.empty:
-                st.warning("Insufficient data for 5-year change calculation.")
-            else:
-                piv2['Change'] = piv2[last_year] - piv2[year_5ago]
-                piv2['Rate']   = piv2['Change'] / piv2[year_5ago] * 100
-                piv2 = piv2.sort_values('Change', ascending=False)
+            # Absolute change
+            fig1, ax1 = plt.subplots(figsize=(8,6))
+            sns.barplot(x=piv2['Change']/1000, y=piv2.index, ax=ax1)
+            ax1.set_title('5-Year Population Change')
+            ax1.set_xlabel('Change (Thousands)')
+            for i, v in enumerate(piv2['Change']/1000):
+                ax1.text(v+0.5, i, f"{v:.1f}", va='center')
+            st.pyplot(fig1)
 
-                # Absolute change (thousands)
-                fig1, ax1 = plt.subplots(figsize=(8,6))
-                sns.barplot(x=piv2['Change']/1000, y=piv2.index, ax=ax1)
-                ax1.set_title('5-Year Population Change')
-                ax1.set_xlabel('Change (Thousands)')
-                for i, v in enumerate(piv2['Change']/1000):
-                    ax1.text(v + 0.5, i, f"{v:.1f}", va='center')
-                st.pyplot(fig1)
+            # Change rate
+            fig2, ax2 = plt.subplots(figsize=(8,6))
+            sns.barplot(x=piv2['Rate'], y=piv2.index, ax=ax2)
+            ax2.set_title('5-Year Population Change Rate')
+            ax2.set_xlabel('Rate (%)')
+            for i, v in enumerate(piv2['Rate']):
+                ax2.text(v+0.5, i, f"{v:.1f}%", va='center')
+            st.pyplot(fig2)
 
-                # Change rate (%)
-                fig2, ax2 = plt.subplots(figsize=(8,6))
-                sns.barplot(x=piv2['Rate'], y=piv2.index, ax=ax2)
-                ax2.set_title('5-Year Population Change Rate')
-                ax2.set_xlabel('Rate (%)')
-                for i, v in enumerate(piv2['Rate']):
-                    ax2.text(v + 0.5, i, f"{v:.1f}%", va='center')
-                st.pyplot(fig2)
+        # 6) 연도별 증감 상위 100건 테이블
+        yearly = reg[['Region','Year','Population']].sort_values(['Region','Year'])
+        diff_df = (
+            yearly
+            .groupby('Region')
+            .apply(lambda g: g.assign(Diff=g['Population'].diff()))
+            .reset_index(drop=True)
+            .dropna(subset=['Diff'])
+        )
+        top100 = diff_df.sort_values('Diff', ascending=False).head(100)
+
+        def hl(val):
+            return 'background-color: lightblue' if val>0 else 'background-color: lightcoral'
+        styled = (
+            top100[['Region','Year','Population','Diff']]
+            .style
+            .applymap(hl, subset=['Diff'])
+            .format({"Population":"{:,}", "Diff":"{:,}"})
+        )
+        st.subheader("Top 100 Year-over-Year Changes")
+        st.write(styled)
 
 
         tabs = st.tabs([
