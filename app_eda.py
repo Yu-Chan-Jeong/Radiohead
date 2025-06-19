@@ -316,22 +316,21 @@ class EDA:
         with tabs[4]:
             st.header("Cumulative Population Area Chart")
 
-            # 년도 리스트와 각 지역별 값 리스트 준비
-            years = pivot.index.tolist()
-            data = [pivot[col].values for col in pivot.columns]
+            # pivot DataFrame이 numeric인지 다시 한 번 보장
+            df_area = pivot.copy()
+            df_area.index = df_area.index.astype(int)      # 인덱스: Year
+            df_area = df_area.astype(float)                # 값: Population
 
-            fig3, ax3 = plt.subplots(figsize=(12, 7))
-            palette = sns.color_palette("tab20", n_colors=len(pivot.columns))
-
-            # stackplot 으로 누적 영역 그래프
-            ax3.stackplot(years, *data, labels=pivot.columns, colors=palette)
-            ax3.set_title("Population by Region Over Years")
-            ax3.set_xlabel("Year")
-            ax3.set_ylabel("Population")
-            ax3.legend(title="Region", bbox_to_anchor=(1, 1))
+            # DataFrame.plot.area 사용 (streamlit 친화적)
+            fig, ax = plt.subplots(figsize=(12, 7))
+            df_area.plot.area(ax=ax, colormap='tab20', legend=False)
+            ax.set_title("Population by Region Over Years")
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Population")
+            ax.legend(title="Region", bbox_to_anchor=(1, 1))
 
             plt.tight_layout()
-            st.pyplot(fig3)
+            st.pyplot(fig)
 # ---------------------
 # 페이지 객체 생성
 # ---------------------
