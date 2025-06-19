@@ -203,15 +203,18 @@ class Logout:
 class EDA:
     def __init__(self):
         st.title("📊 Bike Sharing Demand EDA")
+        
+            # 파일 업로드 직후
+        orig_df = pd.read_csv(uploaded, dtype=str)
+
+        st.title("Region Population Change Analysis")
+
+        # 1) CSV 업로드
         uploaded = st.file_uploader("데이터셋 업로드 (population_trend.csv)", type="csv")
         if not uploaded:
             st.info("population_trend 파일을 업로드 해주세요.")
             return
 
-            # 파일 업로드 직후
-        orig_df = pd.read_csv(uploaded, dtype=str)
-
-        st.title("Region Population Change Analysis")
 
         # 2) 데이터 로드 및 컬럼 정리
         df = pd.read_csv(uploaded, dtype=str)
