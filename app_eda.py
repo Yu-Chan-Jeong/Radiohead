@@ -204,13 +204,13 @@ class EDA:
     def __init__(self):
         st.title("📊 Population Trend EDA")
 
-        # 1) File uploader
+        # 1) Upload
         uploaded = st.file_uploader("Upload population_trends.csv", type="csv")
         if not uploaded:
             st.info("Please upload population_trends.csv")
             st.stop()
 
-        # 2) Read and clean
+        # 2) Read & clean
         orig_df = pd.read_csv(uploaded, dtype=str)
         orig_df.columns = orig_df.columns.str.strip()
         orig_df = orig_df.replace('-', '0')
@@ -219,12 +219,12 @@ class EDA:
         orig_df['Births']     = pd.to_numeric(orig_df['출생아수(명)'], errors='coerce')
         orig_df['Deaths']     = pd.to_numeric(orig_df['사망자수(명)'], errors='coerce')
 
-        # 3) Prepare regional DataFrame (exclude nationwide)
+        # 3) Regional DF (exclude nationwide)
         region_df = orig_df[orig_df['지역'] != '전국'].copy()
         region_map = {
             '서울특별시':'Seoul','부산광역시':'Busan','대구광역시':'Daegu',
             '인천광역시':'Incheon','광주광역시':'Gwangju','대전광역시':'Daejeon',
-            '울산광역시':'Ulsan','세종특별자치시':'Sejong','경기도':'Gyeonggi',
+            '울산광역시':'Ulsan','세종':'Sejong','경기도':'Gyeonggi',
             '강원도':'Gangwon','충청북도':'Chungbuk','충청남도':'Chungnam',
             '전라북도':'Jeonbuk','전라남도':'Jeonnam','경상북도':'Gyeongbuk',
             '경상남도':'Gyeongnam','제주특별자치도':'Jeju'
@@ -232,24 +232,16 @@ class EDA:
         region_df['Region'] = region_df['지역'].map(region_map)
         region_df = region_df.dropna(subset=['Population'])
 
-        # 4) Pivot table for tabs below
+        # 4) Pivot table for later
         pivot = (
             region_df
             .pivot_table(index='Year', columns='Region', values='Population', aggfunc='sum')
             .fillna(0)
             .sort_index()
         )
-        # Ensure numeric dtype for plotting
-        pivot = pivot.astype(float)
 
         # 5) Tabs
-        tabs = st.tabs([
-            "Basic Stats",
-            "Nationwide Trend",
-            "Pivot Table",
-            "Change Analysis",
-            "Visualization"
-        ])
+        tabs = st.tabs(["Basic Stats", "Nationwide Trend", "Pivot Table", "Change Analysis", "Visualization"])
 
         # Basic Stats
         with tabs[0]:
@@ -262,7 +254,7 @@ class EDA:
 
         # Nationwide Trend
         with tabs[1]:
-            st.header("Nationwide Trend & 2035 Projection")
+            st.header("Nationwide Trend & Projection")
             nation = orig_df[orig_df['지역']=='전국'].sort_values('Year')
             last3   = nation.tail(3)
             avg_net = (last3['Births'] - last3['Deaths']).mean()
@@ -291,7 +283,7 @@ class EDA:
             st.header("5-Year Change Analysis")
             years = sorted(pivot.columns)
             if len(years) < 2:
-                st.warning("Not enough data to compute changes.")
+                st.warning("Not enough data for change analysis.")
             else:
                 last_year = years[-1]
                 year_5ago = years[-6] if len(years) > 5 else years[0]
@@ -315,22 +307,20 @@ class EDA:
         # Visualization
         with tabs[4]:
             st.header("Cumulative Population Area Chart")
+            years = pivot.index.astype(int).to_numpy()
+            data = [pivot[col].to_numpy(dtype=float) for col in pivot.columns]
 
-            # 1) X축: Year 리스트 (정수)
-            years = pivot.index.astype(int).tolist()
-
-            # 2) Y축: 각 Region별 Population 값 배열 (float)
-            data = [pivot[col].astype(float).to_numpy() for col in pivot.columns]
-
-            # 3) 그리기
-            fig3, ax3 = plt.subplots(figsize=(12, 7))
+            fig3, ax3 = plt.subplots(figsize=(12,7))
             palette = sns.color_palette("tab20", n_colors=len(data))
-            ax3.stackplot(years, *data, labels=pivot.columns.tolist(), colors=palette)
+            cum = np.zeros_like(years, dtype=float)
+            for vals, color, label in zip(data, palette, pivot.columns):
+                ax3.fill_between(years, cum, cum + vals, label=label, color=color)
+                cum += vals
+
             ax3.set_title("Population by Region Over Years")
             ax3.set_xlabel("Year")
             ax3.set_ylabel("Population")
-            ax3.legend(title="Region", bbox_to_anchor=(1, 1))
-
+            ax3.legend(title="Region", bbox_to_anchor=(1,1))
             plt.tight_layout()
             st.pyplot(fig3)
 # ---------------------
