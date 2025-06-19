@@ -264,9 +264,16 @@ class EDA:
         }
         rc_df['Region'] = rc_df['지역'].map(region_map)
         
+        # 5) pivot and compute 5-year change and rate
         pivot = rc_df.pivot_table(index='Region', columns='Year', values='Population')
-        last_year = pivot.columns.max()
-        year_5ago = last_year - 5
+
+        # 안전하게 5년 전 연도 계산
+        years = sorted(pivot.columns)
+        last_year = years[-1]
+        # 데이터에 6개 이상의 연도가 있으면 정확히 5년 전, 없으면 가장 오래된 연도로
+        year_5ago = years[-6] if len(years) > 5 else years[0]
+
+        # 결측치 제거 후 변화량·변화율 계산
         pivot = pivot.dropna(subset=[year_5ago, last_year])
         pivot['Change'] = pivot[last_year] - pivot[year_5ago]
         pivot['Rate']   = pivot['Change'] / pivot[year_5ago] * 100
