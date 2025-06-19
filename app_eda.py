@@ -213,12 +213,6 @@ class EDA:
 
         st.title("Region Population Change Analysis")
 
-        # 1) CSV 업로드
-        uploaded = st.file_uploader("Upload population_trends.csv", type="csv")
-        if not uploaded:
-            st.info("Please upload the CSV file.")
-            st.stop()
-
         # 2) 데이터 로드 및 컬럼 정리
         df = pd.read_csv(uploaded, dtype=str)
         df.columns = df.columns.str.strip()
