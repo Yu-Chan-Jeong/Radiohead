@@ -204,112 +204,43 @@ class EDA:
     def __init__(self):
         st.title("📊 Bike Sharing Demand EDA")
         
-            # 파일 업로드 직후
-        orig_df = pd.read_csv(uploaded, dtype=str)
-
-        st.title("Region Population Change Analysis")
-
-        # 1) CSV 업로드
         uploaded = st.file_uploader("데이터셋 업로드 (population_trend.csv)", type="csv")
         if not uploaded:
-            st.info("population_trend 파일을 업로드 해주세요.")
+            st.info("population_trend.csv 파일을 업로드 해주세요.")
             return
-
-
-        # 2) 데이터 로드 및 컬럼 정리
-        df = pd.read_csv(uploaded, dtype=str)
-        df.columns = df.columns.str.strip()
-        df['Year'] = df['연도'].astype(int)
-        df['Population'] = pd.to_numeric(df['인구'], errors='coerce')
-        df = df.dropna(subset=['Year','Population'])
-
-        # 3) exclude nationwide
-        df = df[df['지역'] != '전국']
-
-        # 4) translate region names
-        region_map = {
-            '서울특별시': 'Seoul',    '부산광역시': 'Busan',     '대구광역시': 'Daegu',
-            '인천광역시': 'Incheon',  '광주광역시': 'Gwangju',   '대전광역시': 'Daejeon',
-            '울산광역시': 'Ulsan',    '세종특별자치시': 'Sejong', '경기도': 'Gyeonggi',
-            '강원도': 'Gangwon',      '충청북도': 'Chungbuk',   '충청남도': 'Chungnam',
-            '전라북도': 'Jeonbuk',   '전라남도': 'Jeonnam',    '경상북도': 'Gyeongbuk',
-            '경상남도': 'Gyeongnam',  '제주특별자치도': 'Jeju'
-        }
-        df['Region'] = df['지역'].map(region_map)
-
-        # 5) pivot and compute 5-year change and rate
-        pivot = df.pivot_table(index='Region', columns='Year', values='Population')
-        last_year = pivot.columns.max()
-        year_5ago = last_year - 5
-        # ensure both years exist
-        pivot = pivot.dropna(subset=[year_5ago, last_year])
-
-        pivot['Change'] = pivot[last_year] - pivot[year_5ago]
-        pivot['Rate'] = (pivot['Change'] / pivot[year_5ago]) * 100
-
-        # sort descending by absolute change
-        pivot = pivot.sort_values('Change', ascending=False)
-
-        # 6) Plot absolute change (in thousands)
-        fig1, ax1 = plt.subplots(figsize=(8, 6))
-        sns.barplot(x=pivot['Change'] / 1000, y=pivot.index, ax=ax1)
-        ax1.set_title('5-Year Population Change')
-        ax1.set_xlabel('Change (Thousands)')
-        ax1.set_ylabel('Region')
-        # value labels
-        for i, v in enumerate(pivot['Change'] / 1000):
-            ax1.text(v + 0.5, i, f"{v:.1f}", va='center')
-        plt.tight_layout()
-        st.pyplot(fig1)
-
-        # 7) Plot rate change
-        fig2, ax2 = plt.subplots(figsize=(8, 6))
-        sns.barplot(x=pivot['Rate'], y=pivot.index, ax=ax2)
-        ax2.set_title('5-Year Population Change Rate')
-        ax2.set_xlabel('Rate (%)')
-        ax2.set_ylabel('Region')
-        # value labels
-        for i, v in enumerate(pivot['Rate']):
-            ax2.text(v + 0.5, i, f"{v:.1f}%", va='center')
-        plt.tight_layout()
-        st.pyplot(fig2)
-
-        # 8) 해설
-        st.markdown("""
-        **Explanation**
-
-        - The first chart shows the absolute population change over the last 5 years, sorted from highest to lowest.  
-        - The x-axis unit is in thousands of people. Regions at the top have seen the largest increase.  
-        - The second chart shows the percentage change relative to the population five years ago.  
-        - This highlights which regions have grown fastest in relative terms, regardless of their base population.
-        """)
-        # — Sejong 지역 전처리 & 통계 출력 —
-        df = orig_df.copy()
-        df = df[df['지역'] == '세종'].replace('-', '0')
-        for col in ['인구', '출생아수(명)', '사망자수(명)']:
-            df[col] = pd.to_numeric(df[col])
-        # ... (Sejong df.info(), df.describe() 출력) ...
-
-        # — 전국 인구 추이 분석 & 2035년 예측 —
-        # ↓ 기존 pop_df = df.copy() 가 아니라 orig_df 에서 시작
-        pop_df = orig_df.copy()
-        pop_df = pop_df[pop_df['지역'] == '전국'].replace('-', '0')
+        
+        # ← 업로더 직후, orig_df 한 번만 생성
+        orig_df = pd.read_csv(uploaded, dtype=str)
+        orig_df.columns = orig_df.columns.str.strip()
+        
+        
+        # — 1) 세종 지역 전처리 & 통계 출력 —
+        sejong_df = orig_df[orig_df['지역']=='세종'].replace('-', '0').copy()
+        for col in ['인구','출생아수(명)','사망자수(명)']:
+            sejong_df[col] = pd.to_numeric(sejong_df[col], errors='coerce')
+        st.subheader("세종 지역 데이터 구조 (df.info())")
+        buf = io.StringIO(); sejong_df.info(buf=buf); st.text(buf.getvalue())
+        st.subheader("세종 지역 기초 통계량 (df.describe())")
+        st.dataframe(sejong_df.describe())
+        
+        
+        # — 2) 전국 인구 추이 & 2035 예측 —
+        pop_df = orig_df[orig_df['지역']=='전국'].replace('-', '0').copy()
         pop_df['Year']       = pop_df['연도'].astype(int)
         pop_df['Population'] = pd.to_numeric(pop_df['인구'], errors='coerce')
         pop_df['Births']     = pd.to_numeric(pop_df['출생아수(명)'], errors='coerce')
         pop_df['Deaths']     = pd.to_numeric(pop_df['사망자수(명)'], errors='coerce')
         pop_df = pop_df.dropna(subset=['Population','Births','Deaths']).sort_values('Year')
-
+        
         last3   = pop_df.tail(3)
         avg_net = (last3['Births'] - last3['Deaths']).mean()
-        ly, lp  = last3['Year'].iloc[-1], last3['Population'].iloc[-1]
-
+        ly, lp  = last3['Year'].iat[-1], last3['Population'].iat[-1]
+        
         proj_years = list(range(ly+1, 2036))
-        proj_pops  = [lp + avg_net * (y - ly) for y in proj_years]
+        proj_pops  = [lp + avg_net*(y-ly) for y in proj_years]
         proj_df    = pd.DataFrame({'Year': proj_years, 'Population': proj_pops})
-
+        
         plot_df = pd.concat([pop_df[['Year','Population']], proj_df], ignore_index=True)
-
         fig, ax = plt.subplots(figsize=(10,6))
         sns.lineplot(data=plot_df, x='Year', y='Population', label='Observed', ax=ax)
         sns.scatterplot(data=proj_df, x='Year', y='Population', label='Projected', ax=ax)
@@ -317,10 +248,47 @@ class EDA:
         ax.set_xlabel('Year')
         ax.set_ylabel('Population')
         ax.legend()
-        plt.tight_layout()
-
         st.subheader("Population Trend Analysis")
         st.pyplot(fig)
+        
+        
+        # — 3) 지역별 5년 변화량 & 변화율 분석 —
+        rc_df = orig_df[orig_df['지역']!='전국'].replace('-', '0').copy()
+        rc_df['Year']       = rc_df['연도'].astype(int)
+        rc_df['Population'] = pd.to_numeric(rc_df['인구'], errors='coerce')
+        rc_df = rc_df.dropna(subset=['Population'])
+        
+        region_map = {
+            '서울특별시':'Seoul','부산광역시':'Busan','대구광역시':'Daegu',
+            # … 나머지 매핑 …
+        }
+        rc_df['Region'] = rc_df['지역'].map(region_map)
+        
+        pivot = rc_df.pivot_table(index='Region', columns='Year', values='Population')
+        last_year = pivot.columns.max()
+        year_5ago = last_year - 5
+        pivot = pivot.dropna(subset=[year_5ago, last_year])
+        pivot['Change'] = pivot[last_year] - pivot[year_5ago]
+        pivot['Rate']   = pivot['Change'] / pivot[year_5ago] * 100
+        pivot = pivot.sort_values('Change', ascending=False)
+        
+        # Absolute change plot
+        fig1, ax1 = plt.subplots(figsize=(8,6))
+        sns.barplot(x=pivot['Change']/1000, y=pivot.index, ax=ax1)
+        ax1.set_title('5-Year Population Change')
+        ax1.set_xlabel('Change (Thousands)')
+        for i, v in enumerate(pivot['Change']/1000):
+            ax1.text(v + 0.5, i, f"{v:.1f}", va='center')
+        st.pyplot(fig1)
+        
+        # Rate change plot
+        fig2, ax2 = plt.subplots(figsize=(8,6))
+        sns.barplot(x=pivot['Rate'], y=pivot.index, ax=ax2)
+        ax2.set_title('5-Year Population Change Rate')
+        ax2.set_xlabel('Rate (%)')
+        for i, v in enumerate(pivot['Rate']):
+            ax2.text(v + 0.5, i, f"{v:.1f}%", va='center')
+        st.pyplot(fig2)
 
 
         tabs = st.tabs([
