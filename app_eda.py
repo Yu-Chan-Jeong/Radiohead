@@ -203,36 +203,32 @@ class Logout:
 class EDA:
     def __init__(self):
         st.title("📊 Bike Sharing Demand EDA")
-        # 1) Single file uploader
+        # 1) Single uploader
         uploaded = st.file_uploader("데이터셋 업로드 (population_trend.csv)", type="csv")
         if not uploaded:
             st.info("population_trend.csv 파일을 업로드 해주세요.")
             return
 
-        # 2) Read once into orig_df
+        # 2) Read once
         orig_df = pd.read_csv(uploaded, dtype=str)
         orig_df.columns = orig_df.columns.str.strip()
 
-        # — 3) Sejong region preprocessing & stats —
+        # — Sejong region stats —
         sejong_df = (
-            orig_df[orig_df['지역'] == '세종']
+            orig_df[orig_df['지역']=='세종']
             .replace('-', '0')
             .copy()
         )
-        for col in ['인구', '출생아수(명)', '사망자수(명)']:
+        for col in ['인구','출생아수(명)','사망자수(명)']:
             sejong_df[col] = pd.to_numeric(sejong_df[col], errors='coerce')
-
         st.subheader("세종 지역 데이터 구조 (df.info())")
-        buf = io.StringIO()
-        sejong_df.info(buf=buf)
-        st.text(buf.getvalue())
-
+        buf = io.StringIO(); sejong_df.info(buf=buf); st.text(buf.getvalue())
         st.subheader("세종 지역 기초 통계량 (df.describe())")
         st.dataframe(sejong_df.describe())
 
-        # — 4) Nationwide trend & 2035 prediction —
+        # — Nationwide trend & projection —
         pop_df = (
-            orig_df[orig_df['지역'] == '전국']
+            orig_df[orig_df['지역']=='전국']
             .replace('-', '0')
             .copy()
         )
@@ -247,23 +243,20 @@ class EDA:
         ly, lp  = last3['Year'].iat[-1], last3['Population'].iat[-1]
 
         proj_years = list(range(ly+1, 2036))
-        proj_pops  = [lp + avg_net * (y - ly) for y in proj_years]
+        proj_pops  = [lp + avg_net*(y-ly) for y in proj_years]
         proj_df    = pd.DataFrame({'Year': proj_years, 'Population': proj_pops})
 
         trend_df = pd.concat([pop_df[['Year','Population']], proj_df], ignore_index=True)
         fig, ax = plt.subplots(figsize=(10,6))
         sns.lineplot(data=trend_df, x='Year', y='Population', label='Observed', ax=ax)
         sns.scatterplot(data=proj_df, x='Year', y='Population', label='Projected', ax=ax)
-        ax.set_title('Population Trend by Year')
-        ax.set_xlabel('Year')
-        ax.set_ylabel('Population')
-        ax.legend()
+        ax.set_title('Population Trend by Year'); ax.set_xlabel('Year'); ax.set_ylabel('Population'); ax.legend()
         st.subheader("Population Trend Analysis")
         st.pyplot(fig)
 
-        # — 5) Regional 5-year change & rate analysis —
+        # — Regional 5-year change & rate analysis —
         rc_df = (
-            orig_df[orig_df['지역'] != '전국']
+            orig_df[orig_df['지역']!='전국']
             .replace('-', '0')
             .copy()
         )
@@ -283,31 +276,38 @@ class EDA:
 
         pivot = rc_df.pivot_table(index='Region', columns='Year', values='Population')
         years = sorted(pivot.columns)
-        last_year = years[-1]
-        year_5ago = years[-6] if len(years) > 5 else years[0]
-        pivot = pivot.dropna(subset=[year_5ago, last_year])
-        pivot['Change'] = pivot[last_year] - pivot[year_5ago]
-        pivot['Rate']   = pivot['Change'] / pivot[year_5ago] * 100
-        pivot = pivot.sort_values('Change', ascending=False)
 
-        # Absolute change (thousands)
-        fig1, ax1 = plt.subplots(figsize=(8,6))
-        sns.barplot(x=pivot['Change']/1000, y=pivot.index, ax=ax1)
-        ax1.set_title('5-Year Population Change')
-        ax1.set_xlabel('Change (Thousands)')
-        for i, v in enumerate(pivot['Change']/1000):
-            ax1.text(v + 0.5, i, f"{v:.1f}", va='center')
-        st.pyplot(fig1)
+        if len(years) < 2:
+            st.warning("Not enough Year data for regional change analysis.")
+        else:
+            last_year = years[-1]
+            year_5ago = years[-6] if len(years) > 5 else years[0]
 
-        # Change rate (%)
-        fig2, ax2 = plt.subplots(figsize=(8,6))
-        sns.barplot(x=pivot['Rate'], y=pivot.index, ax=ax2)
-        ax2.set_title('5-Year Population Change Rate')
-        ax2.set_xlabel('Rate (%)')
-        for i, v in enumerate(pivot['Rate']):
-            ax2.text(v + 0.5, i, f"{v:.1f}%", va='center')
-        st.pyplot(fig2)
+            pivot2 = pivot.dropna(subset=[year_5ago, last_year])
+            if pivot2.empty:
+                st.warning("Insufficient data for 5-year change calculation.")
+            else:
+                pivot2['Change'] = pivot2[last_year] - pivot2[year_5ago]
+                pivot2['Rate']   = pivot2['Change'] / pivot2[year_5ago] * 100
+                pivot2 = pivot2.sort_values('Change', ascending=False)
 
+                # Absolute change (thousands)
+                fig1, ax1 = plt.subplots(figsize=(8,6))
+                sns.barplot(x=pivot2['Change']/1000, y=pivot2.index, ax=ax1)
+                ax1.set_title('5-Year Population Change')
+                ax1.set_xlabel('Change (Thousands)')
+                for i, v in enumerate(pivot2['Change']/1000):
+                    ax1.text(v + 0.5, i, f"{v:.1f}", va='center')
+                st.pyplot(fig1)
+
+                # Change rate (%)
+                fig2, ax2 = plt.subplots(figsize=(8,6))
+                sns.barplot(x=pivot2['Rate'], y=pivot2.index, ax=ax2)
+                ax2.set_title('5-Year Population Change Rate')
+                ax2.set_xlabel('Rate (%)')
+                for i, v in enumerate(pivot2['Rate']):
+                    ax2.text(v + 0.5, i, f"{v:.1f}%", va='center')
+                st.pyplot(fig2)
 
         tabs = st.tabs([
             "1. 목적 & 절차",
