@@ -203,6 +203,7 @@ class Logout:
 class EDA:
     def __init__(self):
         st.title("📊 Population Trend EDA")
+
         # 1) File uploader
         uploaded = st.file_uploader("Upload population_trends.csv", type="csv")
         if not uploaded:
@@ -238,6 +239,8 @@ class EDA:
             .fillna(0)
             .sort_index()
         )
+        # Ensure numeric dtype for plotting
+        pivot = pivot.astype(float)
 
         # 5) Tabs
         tabs = st.tabs([
@@ -308,26 +311,6 @@ class EDA:
                 ax2.set_title("5-Year Change Rate (%)")
                 ax2.set_xlabel("Rate (%)")
                 st.pyplot(fig2)
-
-                # Top 100 Year-over-Year diffs
-                yoy = (
-                    region_df[['Region','Year','Population']]
-                    .sort_values(['Region','Year'])
-                    .groupby('Region')
-                    .apply(lambda g: g.assign(Diff=g['Population'].diff()))
-                    .reset_index(drop=True)
-                    .dropna(subset=['Diff'])
-                )
-                top100 = yoy.sort_values('Diff', ascending=False).head(100)
-                def hl(val): return 'background-color: lightblue' if val>0 else 'background-color: lightcoral'
-                styled = (
-                    top100[['Region','Year','Population','Diff']]
-                    .style
-                    .applymap(hl, subset=['Diff'])
-                    .format({"Population":"{:,}", "Diff":"{:,}"})
-                )
-                st.subheader("Top 100 Year-over-Year Changes")
-                st.write(styled)
 
         # Visualization
         with tabs[4]:
